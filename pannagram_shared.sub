@@ -1,0 +1,42 @@
+#!/bin/bash
+
+#SBATCH --job-name=Pannagram      ## Name of the job.
+#SBATCH -A grylee_lab     ## account to charge
+#SBATCH -p standard          ## partition/queue name
+#SBATCH --nodes=1            ## (-N) number of nodes to use
+#SBATCH --ntasks=1           ## (-n) number of tasks to launch
+#SBATCH --cpus-per-task=32    ## number of cores the job needs max 64
+#SBATCH --error=slurm-%J.err ## error log file
+#SBATCH -t 3-20:00:00
+
+module load mamba/24.3.0
+. ~/.mymambainit-24.3.0
+mamba activate pannagram
+
+#PATH_DATA=/dfs7/grylee/yuhenh3/Pannagram/Data/ecoli/
+#PATH_OUT=/dfs7/grylee/yuhenh3/Pannagram/Output/ecoli_RF_free_test_1chr/
+#REF_NAME=GCA_000005845.2
+#/dfs7/grylee/yuhenh3/Pannagram/pannagram/inst/pannagram.sh -path_in ${PATH_DATA} -path_out ${PATH_OUT} -cores 16 -nchr 1
+
+
+PATH_DATA=/dfs7/grylee/yuhenh3/Pannagram/Data/DSPR_Mahul_genomes/
+#PATH_DATA=/dfs7/grylee/yuhenh3/Pannagram/Data/fly_Mahul_Harsh/
+PATH_OUT=/dfs7/grylee/yuhenh3/Pannagram/Output/DSPR_Mahul_RF_free_clean_5chr/
+#REF_NAME=GCA_000001215.4
+
+/dfs7/grylee/yuhenh3/Pannagram/pannagram/inst/pannagram.sh -path_in ${PATH_DATA} -path_out ${PATH_OUT} -cores 16 -nchr 5
+
+
+PATH_genomes=/dfs7/grylee/yuhenh3/Pannagram/Output/DSPR_Mahul_RF_free_clean_5chr/intermediate/consensus/
+PATH_CHROMOSOMES=/dfs7/grylee/yuhenh3/Pannagram/Output/DSPR_Mahul_RF_free_clean_5chr/intermediate/chromosomes/
+ALN_TYPE="msa_"
+
+/dfs7/grylee/yuhenh3/Pannagram/pannagram/inst/analys.sh -path_msa ${PATH_genomes} \
+    -path_chr ${PATH_CHROMOSOMES} \
+    -aln_type ${ALN_TYPE} \
+    -seq \
+    -snp \
+    -sv_call  \
+    -sv_sim /dfs7/grylee/yuhenh3/Pannagram/Data/D_mel_transposon_sequence_set_v10.2.fa \
+    -sv_graph \
+    -cores 16
