@@ -17,4 +17,4 @@
 
 
 #### Figure generation and statistical test
-3D_TE_functional_similarity.qmd
+3D_TE_functional_similarity.qmd #generate Fig. 3C & E, Fig. 4A, C & D, Supplementary Fig 11-15
