@@ -7,12 +7,12 @@
 
 
 #### expression rank for TE adjacent genes
-1. RNA_seq_TE_z_score.R # calculate the expression rank based on RPKM
-2. assign_TE_exp_z_Hifi_genome.pl # assign the expression measures to the nearby TEs
+1. RNA_seq_TE_z_score.R #calculate the expression rank based on RPKM
+2. assign_TE_exp_z_Hifi_genome.pl #assign the expression measures to the nearby TEs
 
 
 #### pannagram to estimate TE ages
-1. pannagram_shared.sub
+1. pannagram_shared.sub #running pannagram, which was installed on 05/02/2025
 2. pangenome_hubplot.R #generates the Connection graph. Code was written with assistence from Gemini 2.5 Pro
 
 
