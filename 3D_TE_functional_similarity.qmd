@@ -10,6 +10,8 @@ editor: visual
 
 library(tidyverse)
 library(ggplot2)
+library(glmmTMB)
+library(lme4); library(lmerTest)
 mytheme = theme(
 #	plot.background = element_rect(fill = 'black', color = "black"), 
 	axis.ticks.y = element_line(color = "black", linewidth = 1), 
@@ -50,7 +52,7 @@ strainList = c("A4","A7")
 #| fig-align: "center"
 
 hist = "A4"
-each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
 each_TE <- each_TE |> 
     rename(z_3D = V29, K9 = V32, leng = V28) 
 
@@ -147,13 +149,17 @@ A7: RNA vs DNA (Fisher's Test, p = `r fisher.test(q)$p.value`). LINE vs DNA (Fis
 #| fig-align: "center"
 
 hist = "A4" #A4 and A7 separated; no need to change
-each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
   foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/', fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type <- ifelse(each_TE$class == "DNA","DNA","RNA")
   each_TE <- each_TE |> 
     rename(z_3D = V29, K9 = V32, leng = V28) |> 
     mutate(category = if_else(z_3D >= 5, "3D_yes", "3D_no"), 
            mass = K9 * leng,
            .keep = "all") 
+
+TE_K9 <- each_TE |> 
+  filter(K9 > 1) |> 
+  summarise(percent_A = mean(category == "3D_yes"))
 
 #cor.test(each_TE$K9, each_TE$leng, method = "spearman")
 
@@ -166,9 +172,16 @@ RNA <- each_TE |>
 LTR <- each_TE |> 
   filter(class == "LTR")
 
-gmodel = glm(category ~ K9 + leng, data = LTR, family = binomial(link = "logit"));summary(gmodel)
+gmodel = glm(category ~ K9 + leng + TE_type, data = each_TE, family = binomial(link = "logit"));summary(gmodel)
+summary(lm(leng ~ class, data = each_TE))
+m <- glmmTMB(leng ~ class, family = nbinom12, data = each_TE); summary(m)
+m_po <- glmmTMB(
+  category ~ K9 + leng + class,
+  family = binomial,
+  data = each_TE
+)
+summary(m_po);confint(m_po)
 
-  
 p <- ggplot(each_TE, aes(x = category, y = leng, fill=category,color=category,group = category)) + scale_fill_manual(values=c('grey','#CC79A7')) +
   geom_violin(width = 1, color = "black") +
   geom_boxplot(width = 0.07, color = "black", alpha = 0.5) +
@@ -209,7 +222,7 @@ In A4, TEs with 3D are longer than those without (median `r median(inter$leng)` 
 
 
 hist = "A7"
-each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
   foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/', fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type <- ifelse(each_TE$class == "DNA","DNA","RNA")
 each_TE <- each_TE |> 
     rename(z_3D = V29, K9 = V32, leng = V28) |> 
@@ -217,23 +230,28 @@ each_TE <- each_TE |>
            mass = K9 * leng,
            .keep = "all") 
 
-#each_TE |> 
-#  filter(K9 > 1) |> 
-#  summarise(
-#    sum_3D = sum(z_3D > 5),
-#    n = n()
-#  )
+each_TE |> 
+  filter(K9 > 1) |> 
+  summarise(
+    sum_3D = sum(z_3D >= 5),
+    n = n()
+  )
+
+TE_K9 <- each_TE |> 
+  filter(K9 > 1) |> 
+  summarise(percent_A = mean(category == "3D_yes"))
 
 #model = lm(z_3D ~ K9 + leng, data = each_TE)
 #summary(model)
-#each_TE$category = as.factor(each_TE$category)
-#gmodel = glm(category ~ log2(mass), data = each_TE, family = binomial(link = "logit"));summary(gmodel)
+gmodel = glm(category ~ log2(mass), data = each_TE, family = binomial(link = "logit"));summary(gmodel)
 each_TE$category = as.factor(each_TE$category)
 RNA <- each_TE |> 
   filter(TE_type == "RNA")
 LINE <- each_TE |> 
   filter(class == "LINE")
-gmodel = glm(category ~ K9 + leng, data = LINE, family = binomial(link = "logit"));summary(gmodel)
+
+each_TE$category = as.factor(each_TE$category)
+gmodel = glm(category ~ K9 + leng + TE_type, data = each_TE, family = binomial(link = "logit"));summary(gmodel)
 
 p <- ggplot(each_TE, aes(x=category, y=leng, fill=category,color=category,group = category)) + scale_fill_manual(values=c('grey','#56B4E9')) +
   geom_violin(width = 1, color = "black") +
@@ -413,6 +431,13 @@ em_gene_exp = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-se
   foo <- data.frame(do.call('rbind', strsplit(as.character(em_gene_exp$V10),'/', fixed = TRUE)));em_gene_exp$class <- foo$X1;em_gene_exp$TE_type <- ifelse(em_gene_exp$class == "DNA","DNA","RNA")
 
   each_TE <- em_gene_exp |> 
+    select(V1:V4,V7:V11, V16) |> 
+    rename(chr = V1, gene_left = V2, gene_right = V3, gene_id = V4, TE_left = V7,TE_right = V8, TE_id = V9, TE_class = V10, TE_length = V11, distance = V16)
+  
+  write.table(each_TE, file="/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/A4_ref_RSEM_rpkm_rank_z_distance_gene.txt",sep="\t",eol="\n",row.names = F,col.names = T)
+
+  
+  each_TE <- em_gene_exp |> 
     rename(z_3D = V12, K9 = V15, leng = V11, distance = V16) |> 
     mutate(category = if_else(z_3D >= 5, "3D_yes", "3D_no"), 
            mass = K9 * leng,
@@ -423,6 +448,8 @@ em_gene_exp = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-se
                                   TRUE ~ 'above_20000'),
            gene_nongen = if_else(distance > 0, "intergenic", "genic"), 
            .keep = "all") 
+
+  
 gene_dis_3D_percent <- each_TE |> 
     group_by(gene_nongen) |> 
     summarise(
@@ -565,9 +592,9 @@ ggplot(aes(x = class_dis, y = percent_3D), data = TE_gene_distance_3D) +
 #| fig-height: 4
 #| fig-align: "center"
 
-#chromatin_state = read.table("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/chromatin_color_GSE22069_Drosophila_chromatin_domains_inR6.txt", header = FALSE, fill = TRUE)
+#chromatin_state = read.table("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/chromatin_color_GSE22069_Drosophila_chromatin_domains_inR6.txt", header = FALSE, fill = TRUE)
 
-chromatin_9state = read.table("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/chromatin_9states_S2_inR6.txt", header = FALSE, fill = TRUE) 
+chromatin_9state = read.table("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/chromatin_9states_S2_inR6.txt", header = FALSE, fill = TRUE) 
 chromatin_state <- chromatin_9state |> 
   mutate(V4 = as_factor(V4))
 
@@ -576,13 +603,13 @@ chromatin_9state |>
   group_by(V4) |> 
   summarise( n = n())
 
-gene_gff_R6 = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/dmel_r6.63_exon.gff"), header = FALSE, fill = TRUE)
+gene_gff_R6 = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/dmel_r6.63_exon.gff"), header = FALSE, fill = TRUE)
 
 
 hist = "A4" 
-TE_r6_concor = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_all_windows_dmel-all-chromosome-r6.63_location.txt"), header = FALSE, fill = TRUE) #generated by Rec_genome_alignment_convert_hifi_release6.pl
+TE_r6_concor = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_all_windows_dmel-all-chromosome-r6.63_location.txt"), header = FALSE, fill = TRUE) #generated by Rec_genome_alignment_convert_hifi_release6.pl
 
-each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
 foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/', fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type <- ifelse(each_TE$class == "DNA","DNA","RNA")
 each_TE$R6_chr = TE_r6_concor$V1;each_TE$R6_locat = (TE_r6_concor$V5 + TE_r6_concor$V6)/2
 
@@ -719,6 +746,78 @@ TE_chromatin$category = as.factor(TE_chromatin$category)
 #red_yellow <- bind_rows(red_yellow_A4, red_yellow_A7)
 #glm_model = glm(category ~ chromatin, family = binomial(link = "logit"), data = red_yellow)
 
+
+#################
+recomb_state = read.table("/Users/yuhenghuang/Documents/Postdoc_UCI/recombination/Comeron_2012_PLoSGent_inR6.txt", header = FALSE, fill = TRUE)
+rec_region <- recomb_state |> 
+  mutate(start = V2 - 50000 + 1, 
+         end = V2 + 50000)
+
+
+hist = "A4" 
+TE_r6_concor = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_all_windows_dmel-all-chromosome-r6.63_location.txt"), header = FALSE, fill = TRUE)
+
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/', fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type <- ifelse(each_TE$class == "DNA","DNA","RNA")
+each_TE$R6_chr = TE_r6_concor$V1;each_TE$R6_locat = TE_r6_concor$V5
+
+TE_rec_A4 = each_TE |>
+  left_join(
+    rec_region, join_by(R6_chr == V1 , closest(R6_locat > start))  #find the closet TEs
+  ) |> 
+  rename(z_3D = V29, K9 = V32, leng = V28, distance = V33, rec_rate = V3.y) |> 
+  mutate(category = if_else(z_3D >= 5, "inter", "not_inter"))
+
+hist = "A7" 
+TE_r6_concor = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_all_windows_dmel-all-chromosome-r6.63_location.txt"), header = FALSE, fill = TRUE)
+
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/', fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type <- ifelse(each_TE$class == "DNA","DNA","RNA")
+each_TE$R6_chr = TE_r6_concor$V1;each_TE$R6_locat = TE_r6_concor$V5
+
+
+TE_rec_A7 = each_TE |>
+  left_join(
+    rec_region, join_by(R6_chr == V1 , closest(R6_locat > start))  #find the closet TEs
+  ) |> 
+  rename(z_3D = V29, K9 = V32, leng = V28, distance = V33, rec_rate = V3.y) |> 
+  mutate(category = if_else(z_3D >= 5, "inter", "not_inter"))
+
+combined_TE_rec <- bind_rows(A4 = TE_rec_A4, A7 = TE_rec_A7, .id = "strain")
+inter_TE = combined_TE_rec |> 
+  filter(category == "inter")
+not_inter_TE = combined_TE_rec |> 
+  filter(category == "not_inter")
+
+
+
+
+
+combined_TE_rec$category = as.factor(combined_TE_rec$category)
+gmodel = glm(category ~ rec_rate + K9 + leng, data = combined_TE_rec, family = binomial(link = "logit"));summary(gmodel)
+
+TE_rec <- TE_rec_A7
+inter_TE = TE_rec |> 
+  filter(category == "inter")
+not_inter_TE = TE_rec |> 
+  filter(category == "not_inter")
+
+median(inter_TE$rec_rate, na.rm = T); median(not_inter_TE$rec_rate, na.rm = T)
+wilcox.test(inter_TE$rec_rate, not_inter_TE$rec_rate)
+
+TE_rec$category <- factor(TE_rec$category, levels=c("not_inter","inter"))
+
+p <- ggplot(TE_rec, aes(x = category, y = rec_rate, fill = category,color=category,group = category)) +
+  #scale_fill_manual(values=c('grey','#CC79A7')) +
+  scale_fill_manual(values=c('grey','#56B4E9')) +
+  geom_violin(width = 1, color = "black") +
+  geom_boxplot(width = 0.07, color = "black", alpha = 0.5) +
+  labs(x = "TE type", y = "local recombination rate (cM/Mb)") +
+  mytheme #+
+  #labs(title = hist) +
+  #ylim(0,6)
+ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/Results/A7_Z_3D_local_recom_rate_Comeron.pdf", sep = ""), plot = p, width = 6, height = 5)
+
 ```
 
 `r fisher.test(p)`
@@ -741,7 +840,7 @@ Only one of the two strains show some impact of 3D interaction on nearby gene ex
 
 flanking_cutoff = 5000; distance_cutoff = 40000;
 strain = "A4" 
-gene_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", strain, "_interacting_TE_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+gene_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", strain, "_interacting_TE_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
 
 gene_TE_z = gene_TE |> 
   rowwise() |> #do the following calculate per row
@@ -762,6 +861,19 @@ gene_TE_z = gene_TE |>
    	 mass = log2(K9 * V28)
 	) |> 
   rename (z_3D = V29, distance = V34)
+
+z_3D_sig <- gene_TE_z |> 
+  filter(distance >= 1) |> 
+  filter(z_3D > 5) |> 
+  filter(K9 > 1)
+cor.test(z_3D_sig$K9, z_3D_sig$z_rank, method = "spearman")
+
+z_3D <- gene_TE_z |> 
+  filter(distance >= 1 & is.finite(z_rank) & K9 > 1) |> 
+  mutate(
+    cate = if_else(z_3D > 5, "inter", "not_inter")
+  )
+exp_lm = lm(z_rank ~ cate + K9, data = z_3D)
 
 noK9 = gene_TE_z |> 
   #filter (distance > distance_cutoff) |> 
@@ -786,6 +898,13 @@ inter = nearby |>
 not_inter = nearby |> 
   filter(cate == "K9_not_inter")
 
+p <- ggplot(aes(x = z_3D, y = z_rank), data = nearby) +
+  geom_point(size=3, alpha = 0.5, color="#d5b458") +
+  geom_smooth(method = 'lm', se = T) +
+  labs(title = strain, x = "PCH 3D interaction z-score", y = "expression z-score") +
+  mytheme 
+ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/Results/A4_Z_3D_nearby_gene_expression_rank_scatter.pdf", sep = ""), plot = p, width = 5, height = 5)
+cor.test(nearby$z_3D, nearby$z_rank, method = "spearman")
 
 combined = noK9_not_inter |> 
   bind_rows(nearby)
@@ -799,7 +918,7 @@ p1 <- ggplot(combined, aes(x = cate, y = z_rank,fill = cate, color = cate, group
   labs(title = strain, x = "TE type", y = "z_exp_rank") +
   mytheme +
   ylim(-25,25)
-ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/RNAseq_Results/A4_Z_3D_nearby_gene_expression_3categories.pdf", sep = ""), plot = p1, width = 7, height = 5)
+ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/Results/A4_Z_3D_nearby_gene_expression_3categories.pdf", sep = ""), plot = p1, width = 7, height = 5)
 
 
 ```
@@ -816,7 +935,7 @@ In A4, TEs with 3D are not different from those without (median `r median(inter$
 
 flanking_cutoff = 5000; distance_cutoff = 40000;
 strain = "A7" 
-gene_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", strain, "_interacting_TE_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+gene_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", strain, "_interacting_TE_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
 
 gene_TE_z = gene_TE |> 
   rowwise() |> #do the following calculate per row
@@ -837,6 +956,24 @@ gene_TE_z = gene_TE |>
    	 mass = K9 * V28
 	) |> 
   rename (z_3D = V29, distance = V34)
+
+z_3D_sig <- gene_TE_z |> 
+  filter(distance >= 1) |> 
+  #filter(z_3D > 5) |> 
+  filter(K9 > 1)
+cor.test(z_3D_sig$z_3D, z_3D_sig$z_rank, method = "spearman")
+
+
+z_3D <- gene_TE_z |> 
+  filter(distance >= 1 & is.finite(z_rank)  & K9 > 1) |> 
+  mutate(
+    cate = if_else(z_3D > 5, "inter", "not_inter")
+  )
+exp_lm = lm(z_rank ~ cate + K9, data = z_3D)
+
+cor.test(z_3D_sig$z_3D, z_3D_sig$z_rank, method = "spearman")
+cor.test(z_3D_sig$K9, z_3D_sig$z_rank, method = "spearman")
+
 
 noK9 = gene_TE_z |> 
   #filter (distance > distance_cutoff) |> 
@@ -860,6 +997,13 @@ inter = nearby |>
 not_inter = nearby |> 
   filter(cate == "K9_not_inter")
 
+p <- ggplot(aes(x = z_3D, y = z_rank), data = nearby) +
+  geom_point(size=3, alpha = 0.5, color="#d5b458") +
+  geom_smooth(method = 'lm', se = T) +
+  labs(title = strain, x = "PCH 3D interaction z-score", y = "expression z-score") +
+  mytheme
+ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/Results/A7_Z_3D_nearby_gene_expression_rank_scatter.pdf", sep = ""), plot = p, width = 5, height = 5)
+cor.test(nearby$z_3D, nearby$z_rank, method = "spearman")
 
 combined = noK9_not_inter |> 
   bind_rows(nearby)
@@ -874,7 +1018,7 @@ p1 <- ggplot(combined, aes(x = cate, y = z_rank,fill = cate, color = cate, group
   mytheme +
   ylim(-25,25)
 
-ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/RNAseq_Results/A7_Z_3D_nearby_gene_expression_3categories.pdf", sep = ""), plot = p1, width = 7, height = 5)
+ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/RNAseq_Results/A7_Z_3D_nearby_gene_expression_3categories.pdf", sep = ""), plot = p1, width = 7, height = 5)
 ```
 
 In A7, when TEs showed H3K9me3 enrichment, 3D interactions tend to reduce expression (higher z-score for expression rank) (median `r median(inter$z_rank)` vs `r median(not_inter$z_rank)`. MWU test p = `r wilcox.test(inter$z_rank, not_inter$z_rank, alternative= "greater")$p.value`).
@@ -892,18 +1036,18 @@ Due to most TEs are private, the effects of 3D on TE frequencies are hard to det
 #| fig-align: "center"
 
 hist = "A4"
-each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
 
   foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/', fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type <- ifelse(each_TE$class == "DNA","DNA","RNA")
   each_TE <- each_TE |> 
     rename(z_3D = V29, K9 = V32, leng = V28) |> 
     select(V23, V24, V25, V26, class, TE_type, leng, z_3D, K9)
   
-TEfreq = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, ".combined.Calls.SFS.Filtered3D.Annotated.MOD2CombAdd.txt"),header = T)
+TEfreq = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, ".combined.Calls.SFS.Filtered3D.Annotated.MOD2CombAdd.txt"),header = T)
 
 #TEfreq_m = TEfreq |> 
 #  left_join(each_TE, join_by("CHR" == "V23", "START" == "V24", "END" == "V25"))
-TEfreq_m = TEfreq |> 
+TEfreq_A4 = TEfreq |> 
   bind_cols(each_TE) |> 
   separate_wider_delim(AC_AN_AF, delim = ";", names = c("minor", "major","total","freq")) |> 
   separate_wider_delim(total, delim = "=", names = c("sign1", "count")) |> 
@@ -919,16 +1063,16 @@ TEfreq_m = TEfreq |>
     filter(count >= 50) #|> 
   #filter(K9_type == "K9_yes")
 
-inter = TEfreq_m |> 
+inter = TEfreq_A4 |> 
   filter(category == "3D_yes")
   #filter(K9_type == "K9_yes")
 
-not_inter = TEfreq_m |> 
+not_inter = TEfreq_A4 |> 
   filter(category == "3D_no")
   #filter(K9_type == "K9_no")
 
 #ggplot(TEfreq_m, aes(x = allele_freq, after_stat(density), fill = K9_type)) +
-p1 <- ggplot(TEfreq_m, aes(x = allele_freq, fill = category)) +
+p1 <- ggplot(TEfreq_A4, aes(x = allele_freq, fill = category)) +
   scale_fill_manual(values = c('grey','#CC79A7')) +
   #geom_density(alpha = 0.5, color = NA) +
   geom_histogram(aes(y = stat(width*density)), position = "dodge") +
@@ -937,9 +1081,9 @@ p1 <- ggplot(TEfreq_m, aes(x = allele_freq, fill = category)) +
   xlim(-0.005, 0.1)
 ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/RNAseq_Results/Fig S15. A4_TEfreq_3D_scale_0_0.1.pdf", sep = ""), plot = p1, width = 7, height = 5)
 
-#TEfreq_m$TE_present = as.factor(TEfreq_m$TE_present)
-#glm_model = glm(TE_present ~ category + leng, family = binomial(link = "logit"), data = TEfreq_m)
-#summary(glm_model)
+TEfreq_A4$TE_present = as.factor(TEfreq_A4$TE_present)
+glm_model = glm(TE_present ~ category + leng, family = binomial(link = "logit"), data = TEfreq_A4)
+summary(glm_model)
 
 ```
 
@@ -954,18 +1098,18 @@ In A4, TEs freq tend to be lower for those with 3D (mean `r mean(inter$allele_fr
 #| fig-align: "center"
 
 hist = "A7"
-each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
+each_TE = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"), header = FALSE, fill = TRUE)
 
   foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/', fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type <- ifelse(each_TE$class == "DNA","DNA","RNA")
   each_TE <- each_TE |> 
     rename(z_3D = V29, K9 = V32, leng = V28) |> 
     select(V23, V24, V25, V26, class, TE_type, leng, z_3D, K9)
   
-TEfreq = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, ".combined.Calls.SFS.Filtered3D.Annotated.MOD2CombAdd.txt"),header = T)
+TEfreq = read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, ".combined.Calls.SFS.Filtered3D.Annotated.MOD2CombAdd.txt"),header = T)
 
 #TEfreq_m = TEfreq |> 
 #  left_join(each_TE, join_by("CHR" == "V23", "START" == "V24", "END" == "V25"))
-TEfreq_m = TEfreq |> 
+TEfreq_A7 = TEfreq |> 
   bind_cols(each_TE) |> 
   separate_wider_delim(AC_AN_AF, delim = ";", names = c("minor", "major","total","freq")) |> 
   separate_wider_delim(total, delim = "=", names = c("sign1", "count")) |> 
@@ -981,20 +1125,20 @@ TEfreq_m = TEfreq |>
     filter(count >= 50) #|> 
   #filter(K9_type == "K9_yes")
 
-inter = TEfreq_m |> 
+inter = TEfreq_A7 |> 
   #filter(SIGNF_INTR == 1)
   filter(category == "3D_yes")
   #filter(K9_type == "K9_yes")
 
 
-not_inter = TEfreq_m |> 
+not_inter = TEfreq_A7 |> 
   #filter(SIGNF_INTR == 0)
   filter(category == "3D_no")
   #filter(K9_type == "K9_no")
 
-TEfreq_m$SIGNF_INTR = as.factor(TEfreq_m$SIGNF_INTR)
+TEfreq_A7$SIGNF_INTR = as.factor(TEfreq_A7$SIGNF_INTR)
 #ggplot(TEfreq_m, aes(x = allele_freq, after_stat(density), fill = K9_type)) +
-p1 <- ggplot(TEfreq_m, aes(x = allele_freq,  fill = category)) +
+p1 <- ggplot(TEfreq_A7, aes(x = allele_freq,  fill = category)) +
   scale_fill_manual(values = c('grey','#56B4E9')) +
   #geom_density(alpha = 0.5, color = NA) +
   geom_histogram(aes(y = stat(width*density)), position = "dodge") +
@@ -1003,9 +1147,35 @@ p1 <- ggplot(TEfreq_m, aes(x = allele_freq,  fill = category)) +
   xlim(-0.005, 0.1)
 ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/RNAseq_Results/Fig S15. A7_TEfreq_3D_scale_0_0.1.pdf", sep = ""), plot = p1, width = 7, height = 5)
 
-#TEfreq_m$TE_present = as.factor(TEfreq_m$TE_present)
-#glm_model = glm(TE_present ~ category + leng, family = binomial(link = "logit"), data = TEfreq_m)
-#summary(glm_model)
+TEfreq_A7$TE_present = as.factor(TEfreq_A7$TE_present)
+glm_model = glm(TE_present ~ category + leng, family = binomial(link = "logit"), data = TEfreq_A7)
+summary(glm_model)
+
+combined_df <- bind_rows(
+  list("A4" = TEfreq_A4, "A7" = TEfreq_A7), 
+  .id = "strain"
+)
+fam_count <- combined_df |> 
+  count(SUP_FAM, sort = TRUE)
+
+fam_count_present <- combined_df |> 
+  filter(TE_present == "present_yes") |> 
+  count(SUP_FAM, sort = TRUE)
+
+focal_element <- combined_df |> 
+  filter(SUP_FAM == "jockey")
+wilcox.test(z_3D ~ TE_present, data = focal_element)
+focal_element$TE_present = as.factor(focal_element$TE_present)
+summary(glm(TE_present ~ z_3D, family = binomial(link = "logit"), data = focal_element))
+
+combined_df$TE_present = as.factor(combined_df$TE_present)
+m_po <- glmmTMB(
+  TE_present ~ z_3D + (1 | FAM),
+  family = binomial,
+  data = combined_df
+)
+summary(m_po);confint(m_po)
+
 ```
 
 In A7, TEs freq tend to be higher for those with 3D (mean `r mean(inter$allele_freq)` vs `r mean(not_inter$allele_freq)`, MWU test p = `r wilcox.test(inter$allele_freq, not_inter$allele_freq, alternative= "less")$p.value`).
@@ -1103,6 +1273,8 @@ The spearman correlation coef rho is `r cor.test(num_te_fam$cluster_coef, num_te
 
 #### b. whether the number of similar TEs is related to 3D interaction
 
+##### A4
+
 When related to the 3D interaction, TEs with 3D interaction have more similar TEs than those without 3D internations.
 
 ```{r}
@@ -1163,7 +1335,7 @@ posi_focal <- posi |>
   select(gr, left_f, right_f, chr.x, mid_posi, observed_num_edge.x, n, c_pr)
 
 hist = "A4"
-each_TE<-read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"),header=F)
+each_TE<-read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"),header=F)
 #each_TE <- read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/Pangenome_TE/Results/", hist, ".Hifi_TEs_location.txt"),header=F)
 
 foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/',fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type<-ifelse(each_TE$class == "DNA","DNA","RNA")
@@ -1171,8 +1343,8 @@ foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/',fixed 
 
 each_TE <- each_TE |> 
   mutate(loc = (V24 + V25)/2) |> 
-    rename(z_3D = V29, K9 = V32, leng = V28)
-    #rename(z_3D = V7)
+  rename(z_3D = V29, fc_3D = V30, K9 = V32, leng = V28)
+#rename(z_3D = V7)
 
 Chr_TE <- c("2L", "2R", "3L", "3R", "X")
 Chr_sv <- c("2", "3", "4", "5", "1")
@@ -1199,62 +1371,45 @@ for (i in 1:length(Chr_TE)) {
     select(-data) |> 
     left_join(TE_data, join_by(loc)) |> 
     left_join(sv_data, join_by(mid_posi))
-    iter_out <- bind_rows(iter_out, list_match)
+  iter_out <- bind_rows(iter_out, list_match)
 }
 
-sv_te_out = iter_out |> 
+sv_te_out_A4 = iter_out |> 
   filter(error < error_cutoff & leng < size_cutoff) |> 
-  mutate(category = if_else(z_3D >= 5, "inter", "not_inter"), 
+  mutate(category = if_else(z_3D > 5, "inter", "not_inter"), 
          TE_group = case_when((category == "not_inter" & K9 <= 1) ~ 'K9_no_3D_no',
-          (category == "not_inter" & K9 > 1) ~ 'K9_yes_3D_no',
-          (category == "inter" & K9 > 1) ~ 'K9_yes_3D_yes',
-          (category == "inter" & K9 <= 1) ~ 'K9_no_3D_yes'
-          ),
+                              (category == "not_inter" & K9 > 1) ~ 'K9_yes_3D_no',
+                              (category == "inter" & K9 > 1) ~ 'K9_yes_3D_yes',
+                              (category == "inter" & K9 <= 1) ~ 'K9_no_3D_yes'
+         ),
          .keep = "all") |> 
-#replace_na(list(c_pr = 0))
-replace_na(list(observed_num_edge.x = 0)) #|> 
-  #filter(TE_type == "RNA")
-  #filter(class == "LTR")
-  #filter(V26 == "copia")
+  #replace_na(list(c_pr = 0))
+  replace_na(list(observed_num_edge.x = 0)) #|> 
+#filter(TE_type == "RNA")
+#filter(class == "LTR")
+#filter(V26 == "copia")
 
-#model = lm(observed_num_edge.x ~ category + K9 + leng, data = sv_te_out);summary(model)
-library(lavaan);library(semPlot)
-path_analysis <- sv_te_out |> 
-  rename(z = z_3D,
-             num = observed_num_edge.x
-             )
+model = lm(observed_num_edge.x ~ category, data = sv_te_out_A4);summary(model)
 
-sv_te_out$category <-as.ordered(sv_te_out$category)
-
-model <-'
-z ~ num  + K9 + leng
-num ~ K9 + leng
-'
-fit <- sem(model, data = path_analysis)
-summary(fit)
-
-#semPaths(fit, 'std', layout = 'circle')
-p <- semPaths(fit,"std",edge.label.cex=1, curvePivot = TRUE)
-
-sv_te_out$category = as.factor(sv_te_out$category)
+sv_te_out_A4$category = as.factor(sv_te_out_A4$category)
 #gmodel = glm(category ~ observed_num_edge.x + K9 + leng, data = sv_te_out, family = binomial(link = "logit"));summary(gmodel)
 
-inter_sv = sv_te_out |> 
+inter_sv = sv_te_out_A4 |> 
   filter(category == "inter")
-not_inter_sv = sv_te_out |> 
+not_inter_sv = sv_te_out_A4 |> 
   filter(category == "not_inter")
 
-no_K9_no_3D = sv_te_out |> 
+no_K9_no_3D = sv_te_out_A4 |> 
   filter(TE_group == "K9_no_3D_no")
-no_K9_with_3D = sv_te_out |> 
+no_K9_with_3D = sv_te_out_A4 |> 
   filter(TE_group == "K9_no_3D_yes")
 
-with_K9_no_3D = sv_te_out |> 
+with_K9_no_3D = sv_te_out_A4 |> 
   filter(TE_group == "K9_yes_3D_no")
-with_K9_with_3D = sv_te_out |> 
+with_K9_with_3D = sv_te_out_A4 |> 
   filter(TE_group == "K9_yes_3D_yes")
 
-three_cat_sv = sv_te_out |> 
+three_cat_sv = sv_te_out_A4 |> 
   filter(TE_group != "K9_no_3D_yes")
 
 #sv_te_out$category <- factor(sv_te_out$category, levels=c("not_inter","inter"))
@@ -1266,16 +1421,13 @@ three_cat_sv = sv_te_out |>
 #  mytheme
 
 #ggplot(sv_te_out, aes(x=category, y=observed_num_edge.x, fill=category,color=category,group = category)) + 
-p1 <- ggplot(three_cat_sv, aes(x = TE_group, y = observed_num_edge.x, fill = TE_group,color = TE_group,group = TE_group)) + 
+ggplot(three_cat_sv, aes(x = TE_group, y = observed_num_edge.x, fill = TE_group,color = TE_group,group = TE_group)) + 
   #scale_fill_manual(values=c('#CC79A7','grey')) +
   scale_fill_manual(values=c('grey','#f073ab','#be9ac7')) +
   geom_violin(width = 1, color = "black") +
   geom_boxplot(width = 0.07, color = "black", alpha = 0.5) +
   labs(title = hist, x = "TE type", y = "num of similar TEs") +
   mytheme
-
-ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/RNAseq_Results/A4_K9_3D_number_similar_partner_all.pdf", sep = ""), plot = p1, width = 7, height = 5)
-
 ```
 
 In A4, TEs with 3D have more similar TEs than those without 3D (median `r median(inter_sv$observed_num_edge.x)` vs `r median(not_inter_sv$observed_num_edge.x)` , MWU test p = `r wilcox.test(inter_sv$observed_num_edge.x, not_inter_sv$observed_num_edge.x)$p.value`).
@@ -1285,6 +1437,8 @@ K9_yes_3D_no vs K9_no_3D_no, p = `r wilcox.test(with_K9_no_3D$observed_num_edge.
 K9_yes_3D_yes vs K9_no_3D_no, p = `r wilcox.test(with_K9_with_3D$observed_num_edge.x, no_K9_no_3D$observed_num_edge.x)$p.value`
 
 K9_yes_3D_yes vs K9_yes_3D_no, p = `r wilcox.test(with_K9_with_3D$observed_num_edge.x, with_K9_no_3D$observed_num_edge.x)$p.value`
+
+##### A7
 
 ```{r}
 #| label: pannagraph_A7
@@ -1312,7 +1466,7 @@ posi_focal <- posi |>
   select(gr, left_f, right_f, chr.x, mid_posi, observed_num_edge.x, n, c_pr)
 
 hist = "A7"
-each_TE<-read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"),header=F)
+each_TE<-read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/", hist, "_interacting_TE_with_individual_nearby_gene_expression.txt"),header=F)
 #each_TE <- read.table(paste0("/Users/yuhenghuang/Documents/Postdoc_UCI/Pangenome_TE/Results/", hist, ".Hifi_TEs_location.txt"),header=F)
 
 foo <- data.frame(do.call('rbind', strsplit(as.character(each_TE$V27),'/',fixed = TRUE)));each_TE$class <- foo$X1;each_TE$TE_type<-ifelse(each_TE$class == "DNA","DNA","RNA")
@@ -1349,7 +1503,7 @@ for (i in 1:length(Chr_TE)) {
     iter_out <- bind_rows(iter_out, list_match)
 }
 
-sv_te_out = iter_out |> 
+sv_te_out_A7 = iter_out |> 
   filter(error < error_cutoff & leng < size_cutoff) |> 
   mutate(category = if_else(z_3D >= 5, "inter", "not_inter"), 
          TE_group = case_when((category == "not_inter" & K9 <= 1) ~ 'K9_no_3D_no',
@@ -1365,44 +1519,126 @@ replace_na(list(observed_num_edge.x = 0)) #|>
   #filter(V26 == "copia")
   #filter((leng > 5000)&(leng < 6000))
 
-model = lm(observed_num_edge.x ~ category + K9 + leng, data = sv_te_out);summary(model)
-sv_te_out$category = as.factor(sv_te_out$category)
-gmodel = glm(category ~ observed_num_edge.x + K9 + leng, data = sv_te_out, family = binomial(link = "logit"));summary(gmodel)
 
-path_analysis <- sv_te_out |> 
-  rename(z = z_3D,
-             num = observed_num_edge.x
-             )
-model <-'
-z ~ num  + K9 + leng
-num ~ K9 + leng
-'
-fit <- sem(model, data = path_analysis)
-summary(fit)
+model = lm(observed_num_edge.x ~ category, data = sv_te_out_A7);summary(model)
+sv_te_out_A7$category = as.factor(sv_te_out_A7$category)
+gmodel = glm(category ~ observed_num_edge.x + K9 + leng, data = sv_te_out_A7, family = binomial(link = "logit"));summary(gmodel)
 
-#semPaths(fit, 'std', layout = 'circle')
-p <- semPaths(fit,"std",edge.label.cex=1, curvePivot = TRUE)
+#sv_te_out_A7 |> 
+#  count(V26) |> 
+#  arrange(desc(n))
 
-sv_te_out |> 
-  count(V26) |> 
-  arrange(desc(n))
+combined_sv_A4_A7 <- bind_rows(list(A4 = sv_te_out_A4, A7 = sv_te_out_A7), .id = "strain")
+write.table(combined_sv_A4_A7, "combined_sv_A4_A7_pannagram_count.txt", row.names=F, quote=F, sep="\t")
 
-inter_sv = sv_te_out |> 
+
+library(MASS)
+combined_sv_A4_A7$V26 <- factor(combined_sv_A4_A7$V26)
+
+combined_sv_A4_A7$category <- factor(combined_sv_A4_A7$category, levels = c("not_inter", "inter"))
+levels(combined_sv_A4_A7$category)
+m1 <- glm.nb(observed_num_edge.x ~ category , data = combined_sv_A4_A7);summary(m1)
+
+m1 <- glmmTMB(observed_num_edge.x ~ strain, family = nbinom12, data = combined_sv_A4_A7);summary(m1)
+m1 <- glmmTMB(observed_num_edge.x ~ category, family = nbinom12, data = combined_sv_A4_A7);summary(m1)
+m2 <- glmmTMB(observed_num_edge.x ~ category + TE_type, family = nbinom12, data = combined_sv_A4_A7);summary(m2)
+m3 <- glmmTMB(observed_num_edge.x ~ category + class, family = nbinom12, data = combined_sv_A4_A7);summary(m3)
+#m3 <- glmmTMB(observed_num_edge.x ~ category + (1 | V26), family = nbinom2, data = dat);summary(m3)
+m4 <- glmmTMB(observed_num_edge.x ~ category + (1 | V26), family = nbinom12, data = combined_sv_A4_A7);summary(m4)
+m4 <- glmmTMB(observed_num_edge.x ~ category, family = nbinom1, data = combined_sv_A4_A7);summary(m4)
+
+AIC(m3, m4)
+summary(m3)
+exp(fixef(m3)$cond)
+
+m_nb1 <- glmmTMB(observed_num_edge.x ~ category + (1|V26), family = nbinom1, data = dat)
+m_nb2 <- glmmTMB(observed_num_edge.x ~ category + (1|V26), family = nbinom2, data = dat)
+m12 <- glmmTMB(observed_num_edge.x ~ category + (1|V26), family = nbinom12, data = dat)
+AIC(m_nb1, m_nb2, m12)
+summary(m12)   # inspect which dispersion parameter is doing the work
+
+dat<-combined_sv_A4_A7 #|> 
+  #filter(!str_detect(V26, "_"))
+
+dat$n = dat$observed_num_edge.x
+perm_coef <- replicate(1000, {
+  d <- dat; d$category <- ave(d$category, d$V26, FUN = sample)
+  fixef(glmmTMB(n ~ category + (1|V26), family = nbinom1, data = d))$cond[2]
+})
+mean(abs(perm_coef) >= abs(0.26615))
+
+obs <- median(dat$n[dat$category=="inter"]) - median(dat$n[dat$category=="not_inter"])
+perm <- replicate(10000, {
+  s <- ave(dat$category, dat$V26, FUN = sample)   # shuffle within family
+  median(dat$n[s=="inter"]) - median(dat$n[s=="not_inter"])
+})
+mean(abs(perm) >= abs(obs))
+
+m = lmer(observed_num_edge.x ~ category + (1 | V26), data = combined_sv_A4_A7);summary(m)
+m = lm(observed_num_edge.x ~ category + TE_type, data = combined_sv_A4_A7);summary(m)
+m = glm(observed_num_edge.x ~ category + TE_type, data = combined_sv_A4_A7);summary(m)
+anova(m)                      # Satterthwaite by default
+#anova(m, ddf = "Kenward-Roger")   # more conservative, good for smaller samples
+
+
+m_full <- lmer(observed_num_edge.x ~ category + leng + (1 | V26),
+               data = combined_sv_A4_A7, REML = FALSE)
+m_null <- lmer(observed_num_edge.x ~ leng + (1 | V26),
+               data = combined_sv_A4_A7, REML = FALSE)
+anova(m_null, m_full)   # gives a chi-square LRT p-value
+
+SV_per_fam <- combined_sv_A4_A7 |> 
+  group_by(V26, category) |> 
+  summarise(mean_connect = mean(observed_num_edge.x),
+            group_count = n()
+  ) |> 
+  pivot_wider(
+    names_from = category,
+    values_from = c(mean_connect, group_count)
+  ) |> 
+  filter(group_count_inter >= 10 & group_count_not_inter >= 10)
+
+
+
+wilcox.test(SV_per_fam$mean_connect_inter, SV_per_fam$mean_connect_not_inter, paired = T)
+median(SV_per_fam$mean_connect_inter);median(SV_per_fam$mean_connect_not_inter)
+
+my_fam <- combined_sv_A4_A7 |> 
+  filter(V26 == "roo")
+test_result <- wilcox.test(observed_num_edge.x ~ category, data = my_fam);print(test_result)
+
+group_stats <- my_fam %>%
+  group_by(category) %>%
+  summarize(
+    Mean = mean(observed_num_edge.x, na.rm = TRUE),
+    Median = median(observed_num_edge.x, na.rm = TRUE),
+    Count = n()
+  )
+print(group_stats)
+
+new_names <- c("Chr", "Start","End","Family","Super_Family", "num_similar_TE")
+pannagram_count <- sv_te_out_A7 |> 
+  select(V23:V27, observed_num_edge.x) |> 
+  rename_with(~ new_names)
+write.table(pannagram_count, "A7_pannagram_count.txt", row.names=F, quote=F, sep="\t")
+
+
+inter_sv = sv_te_out_A7 |> 
   filter(category == "inter")
-not_inter_sv = sv_te_out |> 
+not_inter_sv = sv_te_out_A7 |> 
   filter(category == "not_inter")
 
-no_K9_no_3D = sv_te_out |> 
+no_K9_no_3D = sv_te_out_A7 |> 
   filter(TE_group == "K9_no_3D_no")
-no_K9_with_3D = sv_te_out |> 
+no_K9_with_3D = sv_te_out_A7 |> 
   filter(TE_group == "K9_no_3D_yes")
 
-with_K9_no_3D = sv_te_out |> 
+with_K9_no_3D = sv_te_out_A7 |> 
   filter(TE_group == "K9_yes_3D_no")
-with_K9_with_3D = sv_te_out |> 
+with_K9_with_3D = sv_te_out_A7 |> 
   filter(TE_group == "K9_yes_3D_yes")
 
-three_cat_sv = sv_te_out |> 
+three_cat_sv = sv_te_out_A7 |> 
   filter(TE_group != "K9_no_3D_yes")
 
 #sv_te_out$category <- factor(sv_te_out$category, levels=c("not_inter","inter"))
@@ -1422,8 +1658,94 @@ p1 <- ggplot(three_cat_sv, aes(x = TE_group, y = observed_num_edge.x, fill = TE_
   labs(title = hist, x ="TE type", y = "num of similar TEs") +
   mytheme
 
-ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq/RNAseq_Results/A7_K9_3D_number_similar_partner_all.pdf", sep = ""), plot = p1, width = 7, height = 5)
+#ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/Results/A7_K9_3D_number_similar_partner_all.pdf", sep = ""), plot = p1, width = 7, height = 5)
 
+#kimura_distance <- read_tsv("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/3D_ms/TE_per_copy_kimura_family_strains_pooled.tsv", col_names = T)
+kimura_distance <- read_tsv("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/3D_ms/TE_per_copy_kimura_family_strains_assembly.tsv", col_names = T)
+
+#kimura_distance_A4 <- kimura_distance |> 
+#  filter(assembly == "A4")
+
+num_similar_kd <- sv_te_out_A7 |> 
+#num_similar_kd <- combined_sv_A4_A7 |> 
+  left_join(kimura_distance, join_by(V23 == chrom, V24 == start)) |> 
+  #filter(cov_consensus > 0.2)
+  mutate(log10_kimura_dis = log10(median_pairwise_k2p)) |> 
+  filter(if_all(log10_kimura_dis, ~ is.finite(.)))
+
+#CC79A7 
+#56B4E9
+
+p <- ggplot(aes(x = log10_kimura_dis, y = observed_num_edge.x), data = num_similar_kd) +
+  geom_point(size=3, alpha = 0.5, color="#56B4E9") +
+  geom_smooth(method = 'lm', se = F,  size = 1.5, color = "grey") +
+  ylab("number of similar TEs") +
+  xlab("log10(Kimura distance)") +
+  mytheme
+  
+  ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/Results/log10_remove_inf_number_similar_median_pairwise_KimuraDistance_assembly_A7.pdf", sep = ""), plot = p, width = 5, height = 5)
+  
+cor.test(num_similar_kd$log10_kimura_dis, num_similar_kd$observed_num_edge.x, method = "spearman")
+  
+  inter_sv = num_similar_kd |> 
+    filter(category == "inter")
+  not_inter_sv = num_similar_kd |> 
+    filter(category == "not_inter")
+  
+  no_K9_no_3D = num_similar_kd |> 
+    filter(TE_group == "K9_no_3D_no")
+  no_K9_with_3D = num_similar_kd |> 
+    filter(TE_group == "K9_no_3D_yes")
+  
+  with_K9_no_3D = num_similar_kd |> 
+    filter(TE_group == "K9_yes_3D_no")
+  with_K9_with_3D = num_similar_kd |> 
+    filter(TE_group == "K9_yes_3D_yes")
+  
+  wilcox.test(inter_sv$log10_kimura_dis, not_inter_sv$log10_kimura_dis)
+  
+  wilcox.test(with_K9_no_3D$log10_kimura_dis, with_K9_with_3D$log10_kimura_dis)
+  wilcox.test(no_K9_no_3D$log10_kimura_dis, with_K9_no_3D$log10_kimura_dis)
+  wilcox.test(no_K9_no_3D$log10_kimura_dis, with_K9_with_3D$log10_kimura_dis)
+  
+  
+  
+  median(inter_sv$kimura_k2p);median(not_inter_sv$kimura_k2p)
+  median(with_K9_no_3D$log10_kimura_dis);median(with_K9_with_3D$log10_kimura_dis)
+  
+    three_cat_sv = num_similar_kd |> 
+    filter(TE_group != "K9_no_3D_yes")
+  num_similar_kd$category <- factor(num_similar_kd$category, levels = c("not_inter", "inter"))
+  #p1 <- ggplot(num_similar_kd, aes(x = category, y = median_pairwise_k2p, fill = category,color = category,group = category)) + 
+  p1 <- ggplot(three_cat_sv, aes(x = TE_group, y = log10_kimura_dis, fill = TE_group,color = TE_group,group = TE_group)) + 
+    #scale_fill_manual(values=c('grey','#f0e442','#e69f00')) +
+    
+    #scale_fill_manual(values=c('grey','#f073ab','#be9ac7')) +
+    scale_fill_manual(values=c('grey','#b3c074','#5d95c7')) +
+    geom_violin(width = 1, color = "black") +
+    geom_boxplot(width = 0.07, color = "black", alpha = 0.5) +
+    labs(x ="TE type", y = "log10(Kimura distance)") +
+    #ylim(0, 0.02) +
+    mytheme
+
+  ggsave(file = paste("/Users/yuhenghuang/Documents/Postdoc_UCI/RNA-seq_3D/Results/log10_remove_inf_K9_3D_or_not_pairwise_median_KimuraDistance_assembly_A7.pdf", sep = ""), plot = p1, width = 7, height = 5)
+  
+  
+  k2p_per_fam <- num_similar_kd |> 
+    group_by(V26, category) |> 
+    summarise(median_connect = median(median_pairwise_k2p),
+              group_count = n()
+    ) |> 
+    pivot_wider(
+      names_from = category,
+      values_from = c(median_connect, group_count)
+    ) |> 
+    filter(group_count_inter >= 10 & group_count_not_inter >= 10)
+  wilcox.test(k2p_per_fam$median_connect_inter, k2p_per_fam$median_connect_not_inter, paired = T)
+  
+  m = lmer(log_kimura_dis ~ category + (1 | V26), data = num_similar_kd);summary(m)
+  m = lm(median_pairwise_k2p ~ category + K9 + TE_type, data = num_similar_kd); summary(m)
+  anova(m)
 ```
 
 A7 shows the same pattern (median `r median(inter_sv$observed_num_edge.x)` vs `r median(not_inter_sv$observed_num_edge.x)` , MWU test p = `r wilcox.test(inter_sv$observed_num_edge.x, not_inter_sv$observed_num_edge.x)$p.value`).
