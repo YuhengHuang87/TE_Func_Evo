@@ -13,8 +13,10 @@
 
 #### pannagram to estimate TE ages
 1. pannagram_shared.sub #running pannagram, which was installed on 05/02/2025
-2. pangenome_hubplot.R #generates the Connection graph. Code was written with assistence from Gemini 2.5 Pro
+2. pangenome_hubplot.R #generates the Connection graph. Code was written with assistance from Gemini 2.5 Pro
 
+#### calculating Kimura distance
+te_within_family_kimura.py
 
 #### Figure generation and statistical test
-3D_TE_functional_similarity.qmd #generate Fig. 3C & E, Fig. 4A, C & D, Supplementary Fig 11-15
+3D_TE_functional_similarity.qmd #generate Fig. 3C & E, Fig. 4A, B & D, Supplementary Fig 20-25
